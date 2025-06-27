@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>增强版动态粒子动画 - Life Enhanced</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(45deg, #000000, #1a1a2e, #16213e);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: white;
+            user-select: none;
+        }
+        
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            position: relative;
+        }
+        
+        canvas {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        /* 全屏模式样式 */
+        .fullscreen-mode canvas {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+        
+        .fullscreen-mode .control-panel,
+        .fullscreen-mode .stats,
+        .fullscreen-mode .help {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: opacity 0.3s ease;
+        }
+        
+        .fullscreen-mode .container {
+            background: #000 !important;
+        }
+        
+        /* 全屏模式下隐藏鼠标光标并优化体验 */
+        .fullscreen-mode {
+            cursor: none;
+            background: #000 !important;
+        }
+        
+        /* 全屏模式下canvas居中显示 */
+        .fullscreen-mode canvas {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            z-index: 9999 !important;
+        }
+        
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+        
+        .control-panel h3 {
+            color: #00ffff;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #cccccc;
+        }
+        
+        .control-button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 3px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .control-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .control-button.active {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+        }
+        
+        .mode-btn {
+            font-size: 10px !important;
+            padding: 6px 10px !important;
+            min-width: 60px;
+        }
+        
+        .mode-btn.active {
+            background: linear-gradient(45deg, #00ffff, #0099cc) !important;
+            color: #000 !important;
+            font-weight: bold;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00ffff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        
+        .stats-value {
+            color: #00ffff;
+            font-weight: bold;
+        }
+        
+        .help {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            font-size: 11px;
+            line-height: 1.4;
+            max-width: 200px;
+        }
+        
+        .help h4 {
+            color: #00ffff;
+            margin-bottom: 8px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 30px rgba(0, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 50px rgba(0, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 30px rgba(0, 255, 255, 0.3); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="control-panel">
+            <h3>🎮 控制面板</h3>
+            
+            <div class="control-group">
+                <button class="control-button" onclick="toggleAnimation()">⏯️ 播放/暂停</button>
+                <button class="control-button" onclick="fullscreen()">🖥️ 全屏</button>
+            </div>
+            
+            <div class="control-group">
+                <label>动画速度:</label>
+                <input type="range" class="slider" id="speedSlider" min="0.1" max="3" step="0.1" value="1" oninput="changeSpeed(this.value)">
+                <span id="speedValue">1.0x</span>
+            </div>
+            
+            <div class="control-group">
+                <label>粒子透明度:</label>
+                <input type="range" class="slider" id="alphaSlider" min="0.1" max="1" step="0.1" value="0.4" oninput="changeAlpha(this.value)">
+                <span id="alphaValue">0.4</span>
+            </div>
+            
+            <div class="control-group">
+                <label>粒子大小:</label>
+                <input type="range" class="slider" id="sizeSlider" min="0.5" max="3" step="0.1" value="1" oninput="changeSize(this.value)">
+                <span id="sizeValue">1.0</span>
+            </div>
+            
+            <div class="control-group">
+                <label>动画模式:</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 3px;">
+                    <button class="control-button mode-btn active" onclick="changeMode(0)">🌀 形态1</button>
+                    <button class="control-button mode-btn" onclick="changeMode(1)">🌊 形态2</button>
+                    <button class="control-button mode-btn" onclick="changeMode(2)">🎯 形态3</button>
+                    <button class="control-button mode-btn" onclick="changeMode(3)">✨ 形态4</button>
+                    <button class="control-button mode-btn" onclick="changeMode(4)">🌸 形态5</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>视觉效果:</label>
+                <button class="control-button" id="trailBtn" onclick="toggleTrail()">🌟 拖尾效果</button>
+                <button class="control-button" id="colorBtn" onclick="toggleColor()">🌈 渐变彩色</button>
+            </div>
+        </div>
+        
+        <canvas id="animationCanvas" width="900" height="900" class="pulse"></canvas>
+        
+        <div class="stats">
+            <h4>📊 实时统计</h4>
+            <div>当前模式: <span class="stats-value" id="currentMode">🌀 形态1</span></div>
+            <div>粒子数量: <span class="stats-value" id="particleCount">20,000</span></div>
+            <div>帧率: <span class="stats-value" id="fps">0</span> FPS</div>
+            <div>动画时间: <span class="stats-value" id="time">0.0</span>s</div>
+            <div>可见粒子: <span class="stats-value" id="visibleParticles">0</span></div>
+        </div>
+        
+        <div class="help">
+            <h4>🔧 快捷键</h4>
+            <div><strong>空格:</strong> 播放/暂停</div>
+            <div><strong>F:</strong> 全屏切换</div>
+            <div><strong>T:</strong> 拖尾效果</div>
+            <div><strong>C:</strong> 渐变彩色</div>
+            <div><strong>1-5:</strong> 预设速度</div>
+            <div><strong>M:</strong> 切换模式</div>
+        </div>
+    </div>
+
+    <script>
+        // 获取canvas和上下文
+        const canvas = document.getElementById('animationCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 动画参数
+        let t = 0;
+        let animationId;
+        let isPlaying = true;
+        let speedMultiplier = 1;
+        let particleAlpha = 0.4;
+        let particleSize = 1;
+        let trailEffect = false;
+        let colorMode = false;
+
+        let currentAnimationMode = 0;
+        
+        // 性能监控
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let fps = 0;
+        
+        // 动画模式配置
+        const animationModes = [
+            {
+                name: '🌀 形态1',
+                particleCount: 20000,
+                timeStep: Math.PI / 90,
+                description: '经典数学粒子动画'
+            },
+            {
+                name: '🌊 形态2',
+                particleCount: 10000,
+                timeStep: Math.PI / 240,
+                description: '流动的形态2效果'
+            },
+            {
+                name: '🎯 形态3',
+                particleCount: 10000,
+                timeStep: Math.PI / 20,
+                description: '形态3绽放动画'
+            },
+            {
+                name: '✨ 形态4',
+                particleCount: 40000,
+                timeStep: Math.PI / 120,
+                description: '形态4扩散效果'
+            },
+            {
+                name: '🌸 形态5',
+                particleCount: 10000,
+                timeStep: Math.PI / 120,
+                description: '形态5绽放动画'
+            }
+        ];
+        
+        // 粒子数据
+        let particles = [];
+        
+        // 双色渐变函数
+        function getTimeBasedColor(baseTime, particleIndex) {
+            // 定义两种主色调
+            const colorPairs = [
+                [[255, 100, 100], [100, 100, 255]], // 红色 → 蓝色
+                [[100, 100, 255], [100, 255, 100]], // 蓝色 → 绿色
+                [[100, 255, 100], [255, 255, 100]], // 绿色 → 黄色
+                [[255, 255, 100], [255, 100, 255]], // 黄色 → 洋红
+                [[255, 100, 255], [100, 255, 255]], // 洋红 → 青色
+                [[100, 255, 255], [255, 100, 100]]  // 青色 → 红色
+            ];
+            
+            // 缓慢的时间变化，每个周期持续更长时间
+            const slowTime = baseTime * 0.1;
+            const cycleLength = Math.PI * 2; // 一个完整周期
+            const pairIndex = Math.floor(slowTime / cycleLength) % colorPairs.length;
+            const nextPairIndex = (pairIndex + 1) % colorPairs.length;
+            
+            // 当前周期内的进度 (0-1)
+            const progress = (slowTime % cycleLength) / cycleLength;
+            
+            // 使用平滑的插值函数
+            const smoothProgress = 0.5 * (1 + Math.sin(progress * Math.PI - Math.PI / 2));
+            
+            const currentPair = colorPairs[pairIndex];
+            const color1 = currentPair[0];
+            const color2 = currentPair[1];
+            
+            // 在两种颜色之间进行插值
+            const r = Math.round(color1[0] + (color2[0] - color1[0]) * smoothProgress);
+            const g = Math.round(color1[1] + (color2[1] - color1[1]) * smoothProgress);
+            const b = Math.round(color1[2] + (color2[2] - color1[2]) * smoothProgress);
+            
+            return [r, g, b];
+        }
+
+        
+        // 初始化粒子数据
+        function initializeParticles() {
+            particles.length = 0;
+            const mode = animationModes[currentAnimationMode];
+            const particleCount = mode.particleCount;
+            
+            for (let i = 0; i < particleCount; i++) {
+                let particle = {
+                    index: i,
+                    x: 0,
+                    y: 0,
+                    brightness: 1.0
+                };
+                
+                // 根据不同模式初始化不同的参数
+                switch (currentAnimationMode) {
+                    case 0: // 形态1模式
+                        particle.originalX = i % 100;
+                        particle.originalY = Math.floor(i / 100);
+                        particle.k = particle.originalX / 4 - 12.5;
+                        particle.e = particle.originalY / 9 + 5;
+                        particle.o = Math.sqrt(particle.k * particle.k + particle.e * particle.e) / 9;
+                        break;
+                        
+                    case 1: // 形态2模式
+                        particle.originalX = i;
+                        particle.originalY = i / 235;
+                        particle.e = particle.originalY / 8 - 13;
+                        break;
+                        
+                    case 2: // 形态3模式
+                        particle.originalX = i % 200;
+                        particle.originalY = i / 43;
+                        particle.k = 5 * Math.cos(particle.originalX / 14) * Math.cos(particle.originalY / 30);
+                        particle.e = particle.originalY / 8 - 13;
+                        particle.d = (particle.k * particle.k + particle.e * particle.e) / 59 + 4;
+                        particle.a = Math.atan2(particle.k, particle.e);
+                        break;
+                        
+                    case 3: // 形态4模式
+                        particle.originalX = i % 200;
+                        particle.originalY = i / 200;
+                        particle.k = particle.originalX / 8 - 12.5;
+                        particle.e = particle.originalY / 8 - 12.5;
+                        particle.o = (particle.k * particle.k + particle.e * particle.e) / 169;
+                        particle.d = 0.5 + 5 * Math.cos(particle.o);
+                        break;
+                        
+                    case 4: // 形态5模式
+                        particle.originalX = i % 200;
+                        particle.originalY = i / 55;
+                        particle.k = 9 * Math.cos(particle.originalX / 8);
+                        particle.e = particle.originalY / 8 - 12.5;
+                        break;
+                }
+                
+                particles.push(particle);
+            }
+            
+            document.getElementById('particleCount').textContent = particleCount.toLocaleString();
+        }
+        
+        // 更新粒子位置
+        function updateParticles() {
+            for (let i = 0; i < particles.length; i++) {
+                const particle = particles[i];
+                
+                switch (currentAnimationMode) {
+                    case 0: // 形态1模式  
+                        updateOriginalMode(particle);
+                        break;
+                    case 1: // 形态2模式
+                        updateWaveMode(particle);
+                        break;
+                    case 2: // 形态3模式
+                        updateSpiralMode(particle);
+                        break;
+                    case 3: // 形态4模式
+                        updateNebulaMode(particle);
+                        break;
+                    case 4: // 形态5模式
+                        updateFlowerMode(particle);
+                        break;
+                }
+            }
+        }
+        
+        // 形态1模式更新
+        function updateOriginalMode(particle) {
+            const { originalX: x, originalY: y, k, e, o } = particle;
+            
+            const tanValue = k !== 0 ? Math.tan(1 / k) : 0;
+            const q = x + 99 + tanValue + o * k * (Math.cos(e * 9) / 4 + Math.cos(y / 2)) * Math.sin(o * 4 - t);
+            const c = o * e / 30 - t / 8;
+            
+            particle.x = (q * 0.7 * Math.sin(c)) + 9 * Math.cos(y / 19 + t) + 200;
+            particle.y = 200 + (q / 2 * Math.cos(c));
+        }
+        
+        // 形态2模式更新
+        function updateWaveMode(particle) {
+            const { originalX: x, originalY: y, e } = particle;
+            
+            const k = (4 + Math.sin(y * 2 - t) * 3) * Math.cos(x / 29);
+            const d = Math.sqrt(k * k + e * e);
+            const q = 3 * Math.sin(k * 2) + 0.3 / (k || 0.001) + Math.sin(y / 25) * k * (9 + 4 * Math.sin(e * 9 - d * 3 + t * 2));
+            
+            particle.x = q + 30 * Math.cos(d - t) + 200;
+            particle.y = 620 - q * Math.sin(d - t) - d * 39;
+        }
+        
+        // 形态3模式更新
+        function updateSpiralMode(particle) {
+            const { a, e, d } = particle;
+            
+            const q = 60 - 3 * Math.sin(a * e) + particle.k * (3 + 4 / d * Math.sin(d * d - t * 2));
+            const c = d / 2 + e / 99 - t / 18;
+            
+            particle.x = q * Math.sin(c) + 200;
+            particle.y = (q + d * 9) * Math.cos(c) + 200;
+        }
+        
+        // 形态4模式更新
+        function updateNebulaMode(particle) {
+            const { originalX: x, originalY: y, k, e, o, d } = particle;
+            
+            particle.x = x + d * k * Math.sin(d * 2 + o + t) + e * Math.cos(e + t) + 100;
+            particle.y = y / 4 - o * 135 + d * 6 * Math.cos(d * 3 + o * 9 + t) + 275;
+            
+            // 计算颜色亮度 (模拟CData)
+            particle.brightness = Math.pow(d * Math.sin(k) * Math.sin(t * 4 + e), 2);
+        }
+        
+        // 形态5模式更新
+        function updateFlowerMode(particle) {
+            const { originalX: x, originalY: y, k, e } = particle;
+            
+            const d = (k * k + e * e) / 99 + Math.sin(t) / 6 + 0.5;
+            const q = 99 - e * Math.sin(Math.atan2(k, e) * 7) / d + k * (3 + Math.cos(d * d - t) * 2);
+            const c = d / 2 + e / 69 - t / 16;
+            
+            particle.x = q * Math.sin(c) + 200;
+            particle.y = (q + 19 * d) * Math.cos(c) + 200;
+        }
+        
+        // 渲染粒子
+        function render() {
+            // 清空画布或添加拖尾效果
+            if (trailEffect) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            let visibleCount = 0;
+            
+            for (let i = 0; i < particles.length; i++) {
+                const particle = particles[i];
+                
+                // 检查粒子是否在可见范围内
+                if (particle.x >= 0 && particle.x <= 400 && 
+                    particle.y >= 0 && particle.y <= 400) {
+                    
+                    visibleCount++;
+                    
+                    // 将坐标映射到canvas尺寸
+                    const canvasX = (particle.x / 400) * canvas.width;
+                    const canvasY = canvas.height - (particle.y / 400) * canvas.height;
+                    
+                    // 设置颜色
+                    let alpha = particleAlpha;
+                    if (currentAnimationMode === 3) { // 形态4模式使用亮度调制
+                        alpha = particleAlpha * Math.max(0.1, Math.min(1, particle.brightness));
+                    }
+                    
+                    if (colorMode) {
+                        // 使用时间渐变色彩
+                        const color = getTimeBasedColor(t, particle.index);
+                        ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`;
+                    } else {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    }
+                    
+                    // 绘制粒子点
+                    ctx.beginPath();
+                    ctx.arc(canvasX, canvasY, particleSize, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+            
+            // 更新统计信息
+            document.getElementById('visibleParticles').textContent = visibleCount.toLocaleString();
+        }
+        
+        // 动画循环
+        function animate() {
+            const currentTime = performance.now();
+            frameCount++;
+            
+            // 计算FPS
+            if (currentTime - lastTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                document.getElementById('fps').textContent = fps;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+            
+            if (isPlaying) {
+                const mode = animationModes[currentAnimationMode];
+                t += mode.timeStep * speedMultiplier;
+                updateParticles();
+                render();
+                
+                // 更新时间显示
+                document.getElementById('time').textContent = (t / Math.PI * 90 / 60).toFixed(1);
+            }
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // 控制函数
+        function toggleAnimation() {
+            isPlaying = !isPlaying;
+        }
+        
+
+        
+        function changeSpeed(value) {
+            speedMultiplier = parseFloat(value);
+            document.getElementById('speedValue').textContent = value + 'x';
+        }
+        
+        function changeAlpha(value) {
+            particleAlpha = parseFloat(value);
+            document.getElementById('alphaValue').textContent = value;
+        }
+        
+        function changeSize(value) {
+            particleSize = parseFloat(value);
+            document.getElementById('sizeValue').textContent = value;
+        }
+        
+        function toggleTrail() {
+            trailEffect = !trailEffect;
+            document.getElementById('trailBtn').classList.toggle('active', trailEffect);
+        }
+        
+        function toggleColor() {
+            colorMode = !colorMode;
+            document.getElementById('colorBtn').classList.toggle('active', colorMode);
+        }
+        
+
+        
+        function fullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().then(() => {
+                    enterFullscreenMode();
+                }).catch(err => {
+                    console.log('全屏模式启动失败:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // 进入全屏模式
+        function enterFullscreenMode() {
+            document.body.classList.add('fullscreen-mode');
+            // 计算合适的canvas尺寸，保持正方形比例
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            const minSize = Math.min(screenWidth, screenHeight);
+            
+            // 设置canvas为正方形，尺寸为屏幕较小边的90%
+            const canvasSize = Math.floor(minSize * 0.9);
+            canvas.width = canvasSize;
+            canvas.height = canvasSize;
+            
+            // 显示退出提示，3秒后自动隐藏
+            showFullscreenTip();
+        }
+        
+        // 显示全屏提示
+        function showFullscreenTip() {
+            const tip = document.createElement('div');
+            tip.innerHTML = '按 ESC 或 F 键退出全屏模式';
+            tip.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 20px;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+                z-index: 10001;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                backdrop-filter: blur(10px);
+                animation: fadeInOut 3s ease-in-out forwards;
+            `;
+            
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeInOut {
+                    0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+                    20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+                }
+            `;
+            
+            document.head.appendChild(style);
+            document.body.appendChild(tip);
+            
+            // 3秒后移除提示
+            setTimeout(() => {
+                if (tip.parentNode) {
+                    tip.parentNode.removeChild(tip);
+                }
+                if (style.parentNode) {
+                    style.parentNode.removeChild(style);
+                }
+            }, 3000);
+        }
+        
+        // 退出全屏模式
+        function exitFullscreenMode() {
+            document.body.classList.remove('fullscreen-mode');
+            // 恢复canvas形态1尺寸
+            adjustCanvasSize();
+        }
+        
+        // 切换动画模式
+        function changeMode(modeIndex) {
+            if (modeIndex === currentAnimationMode) return;
+            
+            currentAnimationMode = modeIndex;
+            
+            // 更新UI
+            document.querySelectorAll('.mode-btn').forEach((btn, index) => {
+                btn.classList.toggle('active', index === modeIndex);
+            });
+            
+            const mode = animationModes[modeIndex];
+            document.getElementById('currentMode').textContent = mode.name;
+            
+            // 重新初始化粒子
+            initializeParticles();
+            
+            console.log(`切换到模式: ${mode.name} (${mode.description})`);
+        }
+        
+        // 键盘控制
+        document.addEventListener('keydown', function(event) {
+            switch(event.code) {
+                case 'Space':
+                    event.preventDefault();
+                    toggleAnimation();
+                    break;
+                case 'KeyF':
+                    fullscreen();
+                    break;
+                case 'KeyT':
+                    toggleTrail();
+                    break;
+                case 'KeyC':
+                    toggleColor();
+                    break;
+                case 'Digit1':
+                    changeSpeed(0.5);
+                    document.getElementById('speedSlider').value = 0.5;
+                    break;
+                case 'Digit2':
+                    changeSpeed(1.0);
+                    document.getElementById('speedSlider').value = 1.0;
+                    break;
+                case 'Digit3':
+                    changeSpeed(1.5);
+                    document.getElementById('speedSlider').value = 1.5;
+                    break;
+                case 'Digit4':
+                    changeSpeed(2.0);
+                    document.getElementById('speedSlider').value = 2.0;
+                    break;
+                case 'Digit5':
+                    changeSpeed(3.0);
+                    document.getElementById('speedSlider').value = 3.0;
+                    break;
+                case 'KeyM':
+                    const nextMode = (currentAnimationMode + 1) % animationModes.length;
+                    changeMode(nextMode);
+                    break;
+            }
+        });
+        
+        // 响应式调整
+        function adjustCanvasSize() {
+            const maxSize = Math.min(window.innerWidth - 40, window.innerHeight - 40, 900);
+            canvas.width = maxSize;
+            canvas.height = maxSize;
+        }
+        
+        // 监听全屏状态变化
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement) {
+                exitFullscreenMode();
+            }
+        });
+        
+        // 监听窗口大小变化
+        window.addEventListener('resize', function() {
+            if (document.fullscreenElement) {
+                // 全屏模式下重新计算canvas尺寸，保持正方形
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                const minSize = Math.min(screenWidth, screenHeight);
+                const canvasSize = Math.floor(minSize * 0.9);
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+            } else {
+                adjustCanvasSize();
+            }
+        });
+        
+        // 初始化
+        adjustCanvasSize();
+        initializeParticles();
+        animate();
+        
+        // 页面加载完成后的初始化
+        window.addEventListener('load', function() {
+            console.log('🎨 增强版动态粒子动画系统已加载');
+            console.log('🌟 包含5种不同的动画模式');
+            console.log('📊 当前模式:', animationModes[currentAnimationMode].name);
+            console.log('🎮 快捷键: 空格(播放), M(切换模式), R(重置), F(全屏)');
+            
+            // 显示欢迎提示
+            setTimeout(() => {
+                console.log('✨ 尝试不同的动画模式，体验不同的视觉效果！');
+            }, 2000);
+        });
+    </script>
+</body>
+</html> 
